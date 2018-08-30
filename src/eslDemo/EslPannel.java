@@ -266,7 +266,7 @@ public class EslPannel extends JPanel implements MqttConnNotify{
 			if (obj != null)
 			{
 				EslObject eslObj = (EslObject)obj;
-				textLogInfo.append(eslObj.mMacAddress + ", execute msg failed\r\n");
+				textLogInfo.append(eslObj.mMacAddress + ", execute msg failed, err:" + eslObj.mCommandCause + "\r\n");
 			}
 		}
 	}
