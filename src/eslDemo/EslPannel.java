@@ -27,7 +27,12 @@ public class EslPannel extends JPanel implements MqttConnNotify{
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
-
+	
+	private final static String CFG_MQTT_SRV_URL = "MqttSrvUrl";
+	private final static String CFG_MQTT_PUBLISH_TOPIC = "MqttPublishTopic";
+	private final static String LAST_LOAD_JSON_FILE_PATH = "LastJsonFilePath";
+	private final static String CFG_MQTT_USR_NAME = "MqttUserName";
+	private final static String CFG_MQTT_USR_PASSWORD = "MqttPassword";
 
 	BeaconMqttClient mMqttClient;  //mqtt connection
     
@@ -107,11 +112,17 @@ public class EslPannel extends JPanel implements MqttConnNotify{
     	this.add(this.pannelLogInfo);	
     	this.add(this.pannelDownload);	
     	
-    	this.textMqttSrv.setText(mMqttClient.getHostAddr());
-    	this.textGwID.setText(mMqttClient.getPublishTopic());
-    	this.textMqttUser.setText(mMqttClient.getUserName());
-    	this.textMqttPwd.setText(mMqttClient.getPassword());
+    	String strMqttSrv = EslConfig.getPropertyValue(CFG_MQTT_SRV_URL, mMqttClient.getHostAddr());
+    	this.textMqttSrv.setText(strMqttSrv);
     	
+    	String strMqttPublishTopic = EslConfig.getPropertyValue(CFG_MQTT_PUBLISH_TOPIC, mMqttClient.getPublishTopic());
+    	this.textGwID.setText(strMqttPublishTopic);
+    	
+    	String strMqttUserName = EslConfig.getPropertyValue(CFG_MQTT_USR_NAME, mMqttClient.getUserName());
+    	this.textMqttUser.setText(strMqttUserName);
+    	
+    	String strMqttUserPassword = EslConfig.getPropertyValue(CFG_MQTT_USR_PASSWORD, mMqttClient.getPassword());
+    	this.textMqttPwd.setText(strMqttUserPassword);
     	addClickListener();
     }
     
@@ -120,13 +131,18 @@ public class EslPannel extends JPanel implements MqttConnNotify{
     	buttonConn.addActionListener(new ActionListener(){
     		 public void actionPerformed(ActionEvent e) {
     			 String strMqttSrvAddr = textMqttSrv.getText();
-    			 String strMqttGwID = textGwID.getText();
+    			 String strMqttPublishTopic = textGwID.getText();
     			 String strMqttUser = textMqttUser.getText();
     			 String strMqttPwd = textMqttPwd.getText();
     			 
     			 if (!mMqttClient.isConnected())
     			 {
-    				 mMqttClient.setConnectinInfo(strMqttSrvAddr, strMqttGwID, strMqttUser, strMqttPwd);
+    				 EslConfig.savePropertyValue(CFG_MQTT_USR_PASSWORD, strMqttPwd);
+    				 EslConfig.savePropertyValue(CFG_MQTT_USR_NAME, strMqttUser);
+    				 EslConfig.savePropertyValue(CFG_MQTT_PUBLISH_TOPIC, strMqttPublishTopic);
+    				 EslConfig.savePropertyValue(CFG_MQTT_SRV_URL, strMqttSrvAddr);
+    				 
+    				 mMqttClient.setConnectinInfo(strMqttSrvAddr, strMqttPublishTopic, strMqttUser, strMqttPwd);
     				 mMqttClient.connect();
     			 }
              }
@@ -153,6 +169,11 @@ public class EslPannel extends JPanel implements MqttConnNotify{
      			 try
      			 {
 	     			 File file = new File(strJsonFileName);
+	     			 
+	     			 //save config
+	     			 String strDirectory = file.getParent();
+	     			 EslConfig.savePropertyValue(LAST_LOAD_JSON_FILE_PATH, strDirectory);
+	     		    
 	     			 String encoding = "GBK";
 	     			 if (file.isFile() && file.exists()) 
 	     			 { 
@@ -181,8 +202,9 @@ public class EslPannel extends JPanel implements MqttConnNotify{
     public boolean openJsonFile()
     {
 	    JFileChooser fileChooser = new JFileChooser();
-	
-	    fileChooser.setCurrentDirectory(new File("."));
+	    
+	    String strLastDirectory = EslConfig.getPropertyValue(LAST_LOAD_JSON_FILE_PATH, ".");
+	    fileChooser.setCurrentDirectory(new File(strLastDirectory));
 	    fileChooser.setAcceptAllFileFilterUsed(false);
 	
 	    final String[]fileEName = { ".json", "JSONÎÄ¼þ(*.json)" };

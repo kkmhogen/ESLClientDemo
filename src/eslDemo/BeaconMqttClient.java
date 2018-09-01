@@ -9,7 +9,7 @@ import eslDemo.MqttConnNotify.ConnectionNotify;
 public class BeaconMqttClient 
 {  
     private String mHostAddr = "tcp://api.ieasygroup.com:61613";  
-    private String mPublishTopic = "kbeacon/publish/D0330A000180";  
+    private String mPublishTopic = "kbeacon/publish/D03304000180";  
     private  String mUserName = "kkmtest";
     private  String mPassWord = "testpassword";
     
