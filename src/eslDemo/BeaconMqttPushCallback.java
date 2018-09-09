@@ -260,10 +260,67 @@ public class BeaconMqttPushCallback implements MqttCallback {
 					eslObj.mAdvData = obj.getString("data1");
 					eslObj.mLastUpdateMsec = System.currentTimeMillis();
 					
-					mDeviceMap.put(strDevMac, eslObj);
-					System.out.println("Found new ESL device, id is:" + strDevMac + ", Rssi:" + nRssi);
-					
-					mMqttNotify.actionNotify(MqttConnNotify.ActionNotify.FOUND_DEVICE, eslObj);
+					if (eslObj.mAdvData != null)
+					{
+						byte[] advData = hexStringToBytes(eslObj.mAdvData);
+						if (advData.length < 24)
+						{
+							return ERR_INVALID_INPUT;
+						}
+						
+						//check service id valid
+						if (advData[5] != (byte)0xA0 || advData[6] != (byte)0xFE)
+						{
+							return ERR_INVALID_INPUT;
+						}
+						
+						//check manufacture id valid
+						if (advData[9] != (byte)0x4B || advData[10] != (byte)0x4d)
+						{
+							return ERR_INVALID_INPUT;
+						}
+						
+						//device type
+						byte deviceType = advData[11];
+						
+						
+						//get version
+						byte eslVersion = advData[12];
+						
+						
+						//esl status
+						byte eslFaultStatus = (byte)((advData[13] >> 4) & 0xF);
+						
+						//esl type, 0x0: 2.9inch esl, 0x1 2.9inch three color esl,  0x2 4.2inch esl
+						byte eslType = (byte)(advData[14] & 0xF);
+						
+						//get voltage
+						int eslVoltage = (advData[15] & 0xFF);
+						eslVoltage = (eslVoltage << 8) + (int)(advData[16] & 0xFF);
+						
+						//get temperature 
+						int eslTemperature = advData[17];
+						
+						//get picture id
+						int eslPictureID = (advData[19] & 0xFF) << 24;
+						eslPictureID += (advData[20] & 0xFF) << 16;
+						eslPictureID += (advData[21] & 0xFF) << 8;
+						eslPictureID += (advData[22] & 0xFF);
+						
+						//referance power
+						byte nEslRefPwr = advData[23];
+						
+						mDeviceMap.put(strDevMac, eslObj);
+						System.out.println("Found new ESL,ID:" + strDevMac 
+								+ ",Rssi:" + nRssi
+								+ ",Version:" + (int)eslVersion
+								+ ",EslType:" + (int)eslType
+								+ ",Voltage:" + (int)eslVoltage + "mV"
+								+ ",Temperature:" + (int)eslTemperature + "¡æ"
+								+ ",PictureID:" + (int)eslPictureID);
+						
+						mMqttNotify.actionNotify(MqttConnNotify.ActionNotify.FOUND_DEVICE, eslObj);
+					}
 				}
 				else
 				{
@@ -281,6 +338,33 @@ public class BeaconMqttPushCallback implements MqttCallback {
 
 		return ERR_PARSE_SUCCESS;
 	}
+	
+	public static byte[] hexStringToBytes(String hexString){
+        if (hexString == null || hexString.equals("")) {
+            return null;
+        }
+        hexString = hexString.toUpperCase();
+        char []hexCharacter = hexString.toCharArray();
+        for (int i = 0; i < hexCharacter.length; i++){
+            if (-1 == charToByte(hexCharacter[i])){
+                return null;
+            }
+        }
+
+        int length = hexString.length() / 2;
+        char[] hexChars = hexString.toCharArray();
+        byte[] d = new byte[length];
+        for (int i = 0; i < length; i++) {
+            int pos = i * 2;
+            d[i] = (byte) (charToByte(hexChars[pos]) << 4 | charToByte(hexChars[pos + 1]));
+
+        }
+        return d;
+    }
+	
+	 private static byte charToByte(char c) {
+	        return (byte) "0123456789ABCDEF".indexOf(c);
+	    }
 	
 	public int handleDownloadAck(JSONObject cmdReqAgent)
 	{
