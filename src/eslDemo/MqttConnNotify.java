@@ -16,9 +16,11 @@ public abstract interface MqttConnNotify {
 		MSG_EXECUTE_FAIL,
 		
 		FOUND_DEVICE,
+		DEVICE_UPDATE,
+		MSG_SHAKE_REQs
 	};
 	
 	public abstract void connectionNotify(ConnectionNotify connNtf);
 		
-	public abstract void actionNotify(ActionNotify downNtf, Object notifyObj);
+	public abstract void actionNotify(ActionNotify downNtf, String strDeviceMac, Object notifyObj);
 }

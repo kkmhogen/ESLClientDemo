@@ -1,6 +1,8 @@
 package eslDemo;
 
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 
 import net.sf.json.JSONArray;
@@ -14,7 +16,7 @@ import eslDemo.MqttConnNotify.ActionNotify;
 import eslDemo.MqttConnNotify.ConnectionNotify;
 
 public class BeaconMqttPushCallback implements MqttCallback {  
-    private static int DEF_REQ_DATA_MAX_LENGHT = 1024*10;
+    private static int DEF_REQ_DATA_MAX_LENGHT = 1024*60;
     BeaconMqttClient mClient;
     MqttConnNotify mMqttNotify;
     
@@ -27,10 +29,28 @@ public class BeaconMqttPushCallback implements MqttCallback {
    	public class EslObject
    	{
    		String mMacAddress;    //device id
-   		String mAdvData;       //adv data
    		int mRssi;
+   		int mFaltStatus;
+   		int mEslType;
+   		int mEslVoltage;
+   		int mEslTemperature;
    		long mLastUpdateMsec;  //report time
+   		int mEslVersion;
+   		int mPictureID;
+   		
+   		int mExeCmdState;
+   		
+   		int mDownJsonNum;
+   		int mDownFailNum;
+   		int mDownSuccNum;
+   		long mLastDownJsonTime;
    		long mCommandCause;
+   	};
+   	
+   	public class EslShakeReq
+   	{
+   		public int mBuffDownMsgNum;
+   		public int mAdvBuffDevNum;
    	};
    	private HashMap<String, EslObject> mDeviceMap = new HashMap<>();
     
@@ -190,6 +210,14 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				System.out.println("shake with Gateway success");
 				mMqttNotify.connectionNotify(ConnectionNotify.CONN_SHAKE_SUCCESS);
 			}
+			else
+			{
+				EslShakeReq shakeReq = new EslShakeReq();
+				shakeReq.mAdvBuffDevNum = cmdReqAgent.optInt("advDevices", -1);
+				shakeReq.mBuffDownMsgNum = cmdReqAgent.optInt("downDevices", -1);
+				mMqttNotify.actionNotify(MqttConnNotify.ActionNotify.MSG_SHAKE_REQs, 
+						strGwAddress, shakeReq);
+			}
 			
 			mGatewaySubaction = strNewSubTopic;
 			mGatewayPubaction = strNewPubTopic;
@@ -203,6 +231,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
 	}
 	
 	
+	//monitor all esl device status
 	public int handleBeaconRpt(JSONObject cmdReqAgent)
 	{		
 		try 
@@ -231,6 +260,10 @@ public class BeaconMqttPushCallback implements MqttCallback {
 		
 				//device mac address
 				String strDevMac = obj.getString("dmac");
+				if (strDevMac == null)
+				{
+					return ERR_INVALID_INPUT;
+				}
 				strDevMac = strDevMac.toUpperCase();
 				if (!isMacAddressValid(strDevMac)){
 					System.out.println("beacon mqtt input invalid error");
@@ -252,83 +285,43 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				
 			
 				EslObject eslObj = mDeviceMap.get(strDevMac);
+				ActionNotify nNotify = MqttConnNotify.ActionNotify.DEVICE_UPDATE;
 				if (eslObj == null)
 				{
 					eslObj = new EslObject();
 					eslObj.mMacAddress = strDevMac;
-					eslObj.mRssi = nRssi;
-					eslObj.mAdvData = obj.getString("data1");
-					eslObj.mLastUpdateMsec = System.currentTimeMillis();
+					nNotify = MqttConnNotify.ActionNotify.FOUND_DEVICE;
+					mDeviceMap.put(strDevMac, eslObj);
+				}
+				
+				eslObj.mRssi = nRssi;
+				eslObj.mLastUpdateMsec = System.currentTimeMillis();
 					
-					if (eslObj.mAdvData != null)
-					{
-						byte[] advData = hexStringToBytes(eslObj.mAdvData);
-						if (advData.length < 24)
-						{
-							return ERR_INVALID_INPUT;
-						}
-						
-						//check service id valid
-						if (advData[5] != (byte)0xA0 || advData[6] != (byte)0xFE)
-						{
-							return ERR_INVALID_INPUT;
-						}
-						
-						//check manufacture id valid
-						if (advData[9] != (byte)0x4B || advData[10] != (byte)0x4d)
-						{
-							return ERR_INVALID_INPUT;
-						}
-						
-						//device type
-						byte deviceType = advData[11];
-						
-						
-						//get version
-						byte eslVersion = advData[12];
-						
-						
-						//esl status
-						byte eslFaultStatus = (byte)((advData[13] >> 4) & 0xF);
-						
-						//esl type, 0x0: 2.9inch esl, 0x1 2.9inch three color esl,  0x2 4.2inch esl
-						byte eslType = (byte)(advData[14] & 0xF);
-						
-						//get voltage
-						int eslVoltage = (advData[15] & 0xFF);
-						eslVoltage = (eslVoltage << 8) + (int)(advData[16] & 0xFF);
-						
-						//get temperature 
-						int eslTemperature = advData[17];
-						
-						//get picture id
-						int eslPictureID = (advData[19] & 0xFF) << 24;
-						eslPictureID += (advData[20] & 0xFF) << 16;
-						eslPictureID += (advData[21] & 0xFF) << 8;
-						eslPictureID += (advData[22] & 0xFF);
-						
-						//referance power
-						byte nEslRefPwr = advData[23];
-						
-						mDeviceMap.put(strDevMac, eslObj);
-						System.out.println("Found new ESL,ID:" + strDevMac 
-								+ ",Rssi:" + nRssi
-								+ ",Version:" + (int)eslVersion
-								+ ",EslType:" + (int)eslType
-								+ ",Voltage:" + (int)eslVoltage + "mV"
-								+ ",Temperature:" + (int)eslTemperature + "¡æ"
-								+ ",PictureID:" + (int)eslPictureID);
-						
-						mMqttNotify.actionNotify(MqttConnNotify.ActionNotify.FOUND_DEVICE, eslObj);
-					}
-				}
-				else
+				//prase data
+				if (!obj.has("type") || obj.getInt("type") != 64)
 				{
-					//update
-					eslObj.mRssi = nRssi;
-					eslObj.mAdvData = obj.getString("data1");
-					eslObj.mLastUpdateMsec = System.currentTimeMillis();
+					continue;
 				}
+				
+				eslObj.mEslType = obj.getInt("eslType");
+				eslObj.mEslVersion = obj.getInt("ver");
+				eslObj.mFaltStatus = obj.getInt("stat");
+				eslObj.mEslVoltage = obj.getInt("vatt");
+				eslObj.mEslTemperature = obj.getInt("temp");
+				eslObj.mPictureID = obj.getInt("picID");
+				
+				if (MqttConnNotify.ActionNotify.FOUND_DEVICE == nNotify)
+				{
+					System.out.println(getCurrentTime() + " Found new ESL,ID:" + strDevMac 
+							+ ",Rssi:" + nRssi
+							+ ",Version:" + (int)eslObj.mEslVersion
+							+ ",EslType:" + getEslType(eslObj.mEslType)
+							+ ",Voltage:" + (int)eslObj.mEslVoltage + "mV"
+							+ ",Temperature:" + (int)eslObj.mEslTemperature + "¡æ"
+							+ ",PictureID:" + (int)eslObj.mPictureID);
+				}
+				
+				mMqttNotify.actionNotify(nNotify, strDevMac, eslObj);
 			}
 		} 
 		catch (Exception e) 
@@ -338,6 +331,54 @@ public class BeaconMqttPushCallback implements MqttCallback {
 
 		return ERR_PARSE_SUCCESS;
 	}
+	
+	private String getEslType(int nType)
+	{
+		switch(nType)
+		{
+			case  0:
+			{
+				return "E029-C";
+			}
+			case 1:
+			{
+				return "E029-R";
+			}
+			case 2:
+			{
+				return "E042-C";
+			}
+			case 3:
+			{
+				return "E042-R";
+			}
+			case 4:
+			{
+				return "E021-C";
+			}
+			case 5:
+			{
+				return "E021-R";
+			}
+			case 6:
+			{
+				return "E022-R";
+			}
+			
+			default:
+				return "Unknown";
+		}
+	}
+	
+	private String getCurrentTime()
+	{
+		long nCurrentTime = System.currentTimeMillis();
+		
+		Date date = new Date(nCurrentTime);
+        return DATE_FORMAT.format(date) + " ";
+	}
+	
+	private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	
 	public static byte[] hexStringToBytes(String hexString){
         if (hexString == null || hexString.equals("")) {
@@ -382,19 +423,14 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				return ERR_INVALID_INPUT;
 			}
 			
-			//found device
-			EslObject eslObj = this.mDeviceMap.get(strDevMac);
-			if (eslObj == null)
-			{
-				this.mMqttNotify.actionNotify(ActionNotify.MSG_DEVICE_NOT_FOUND, null);
-				return ERR_INVALID_INPUT;
-			}
-			
+	
 			String strResult = cmdReqAgent.getString("rslt");
 			if (strResult == null)
 			{
 				return ERR_INVALID_INPUT;
 			}
+			
+			int nSequence = cmdReqAgent.getInt("seq");
 			
 			String strCause = cmdReqAgent.getString("cause");
 			if (strCause == null)
@@ -402,22 +438,34 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				return ERR_INVALID_INPUT;
 			}
 			int nCause = Integer.valueOf(strCause);
+			//found device
+			EslObject eslObj = this.mDeviceMap.get(strDevMac);
+			if (eslObj == null)
+			{
+				eslObj = new EslObject();
+				eslObj.mMacAddress = strDevMac;
+				mDeviceMap.put(strDevMac, eslObj);
+			}
 			eslObj.mCommandCause = nCause;
 			
 			if (strResult.equals("succ"))
 			{
 				if (nCause == 1)
 				{
-					this.mMqttNotify.actionNotify(ActionNotify.MSG_DOWNLOAD_SUCCESS, eslObj);
+					System.out.println(getCurrentTime() + "download data to " + strDevMac + " success:" + nSequence);
+					this.mMqttNotify.actionNotify(ActionNotify.MSG_DOWNLOAD_SUCCESS, strDevMac, eslObj);
 				}
 				else
 				{
-					this.mMqttNotify.actionNotify(ActionNotify.MSG_EXECUTE_SUCCESS, eslObj);
+					System.out.println(getCurrentTime() + "execute command to " + strDevMac + " success:" + nSequence);
+					this.mMqttNotify.actionNotify(ActionNotify.MSG_EXECUTE_SUCCESS, strDevMac, eslObj);
 				}
 			}
 			else
 			{
-				this.mMqttNotify.actionNotify(ActionNotify.MSG_EXECUTE_FAIL, eslObj);
+				System.out.println(getCurrentTime() + "execute command to " + strDevMac + " failed:" 
+							+ nCause + ",seq:" + nSequence);
+				this.mMqttNotify.actionNotify(ActionNotify.MSG_EXECUTE_FAIL, strDevMac, eslObj);
 			}
 		}
 		catch (Exception e) 

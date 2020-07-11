@@ -1,16 +1,31 @@
 package eslDemo;
+
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -18,278 +33,450 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
-import eslDemo.BeaconMqttPushCallback.EslObject;
+import pic2mqttdata.MTagType;
+import pic2mqttdata.Pic2MqttDataService;
+import pic2mqttdata.bmp.Bmp2MqttDataService;
+import pic2mqttdata.bmp.PicturePartRefreshStru;
 
- 
-public class EslPannel extends JPanel implements MqttConnNotify{
-	
-    /**
+
+import net.sf.json.JSONException;
+import net.sf.json.JSONObject;
+
+import eslDemo.BeaconMqttPushCallback.EslObject;
+import eslDemo.BeaconMqttPushCallback.EslShakeReq;
+
+public class EslPannel extends JPanel implements MqttConnNotify {
+
+	/**
 	 * 
 	 */
+	private static int EXE_CMD_IDLE = 0;
+	private static int EXE_CMD_DOING = 1;
+	private static int EXE_CMD_SUCC = 2;
+	private static int EXE_CMD_FAIL = 3;
+
+	private static int MAX_DOWN_INTERVAL = 5 * 60 * 1000;
+	private static int MAX_FAIL_DOWN_INTERVAL = 20 * 60 * 1000;
+
+	private static int mMsgSequence = 101;
 	private static final long serialVersionUID = 1L;
-	
+
 	private final static String CFG_MQTT_SRV_URL = "MqttSrvUrl";
 	private final static String CFG_MQTT_PUBLISH_TOPIC = "MqttPublishTopic";
 	private final static String LAST_LOAD_JSON_FILE_PATH = "LastJsonFilePath";
 	private final static String CFG_MQTT_USR_NAME = "MqttUserName";
 	private final static String CFG_MQTT_USR_PASSWORD = "MqttPassword";
 
-	BeaconMqttClient mMqttClient;  //mqtt connection
-    
- 
-	private JLabel labelMqttSrv, labelGwID, labelMqttUser, labelMqttPwd;            
-	
-	private JButton buttonConn, buttonOpenFile, buttonPushMsg;        
-	private JTextField textMqttSrv, textGwID, textMqttUser, textMqttPwd, textJsonFile;             
+	BeaconMqttClient mMqttClient; // mqtt connection
+
+	private JButton buttonConn, buttonOpenFile, buttonPushMsg, buttonQRCode;
+	private JTextField textMqttSrv, textGwID, textMqttUser, textMqttPwd,
+			textJsonFile, textDeviceID;
 	private JTextArea textLogInfo;
-    private JPanel pannelMqttSrv, pannelGwID, pannelUser, pannelPwd, pannelLogin, pannelLogInfo, pannelDownload;
-	
-    public EslPannel(){
-    	mMqttClient = new BeaconMqttClient(this); 
+	@SuppressWarnings("rawtypes")
+	private JComboBox comboSizeTypeBox;
 
-    	this.labelMqttSrv = new JLabel("Address");
-    	this.labelGwID = new JLabel("Subscribe");
-    	this.labelMqttUser = new JLabel("User Name");
-    	this.labelMqttPwd = new JLabel("User Pwd");
-    	
-    	this.textMqttSrv = new JTextField(30);
-    	this.textGwID = new JTextField(30);
-    	this.textMqttUser = new JTextField(10);
-    	this.textMqttPwd = new JTextField(10);
-    	this.textJsonFile = new JTextField(30);
-    	this.textLogInfo = new JTextArea(6,30);
-    	JScrollPane scroll = new JScrollPane(textLogInfo); 
-    	scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS); 
+	boolean mShakeWithGwSucc = false;
+	long mLastExeCmdTime = 0;
 
-    	this.buttonConn = new JButton("Connected");
-    	this.buttonPushMsg = new JButton("Download");
-    	buttonPushMsg.setEnabled(false);
-    	this.buttonOpenFile = new JButton("OpenFile");
-    	
-    	this.pannelMqttSrv = new JPanel();
-    	this.pannelGwID = new JPanel();
-    	this.pannelUser = new JPanel();
-    	this.pannelPwd = new JPanel();
-    	this.pannelLogin = new JPanel();
-    	this.pannelDownload = new JPanel();
-    	this.pannelLogInfo = new JPanel();
-    	
-    	this.setLayout(new GridLayout(7, 1));  //网格式布局
-    	
-    	this.pannelMqttSrv.add(this.labelMqttSrv);
-    	this.pannelMqttSrv.add(this.textMqttSrv);
-    	this.pannelMqttSrv.setLayout(new FlowLayout(FlowLayout.LEFT));
-    	
-    	this.pannelGwID.add(this.labelGwID);
-    	this.pannelGwID.add(this.textGwID);
-    	this.pannelGwID.setLayout(new FlowLayout(FlowLayout.LEFT));
-    	
-     	this.pannelUser.add(this.labelMqttUser);
-    	this.pannelUser.add(this.textMqttUser);
-    	this.pannelUser.setLayout(new FlowLayout(FlowLayout.LEFT));
-    
-     	this.pannelPwd.add(this.labelMqttPwd);
-    	this.pannelPwd.add(this.textMqttPwd);
-    	this.pannelPwd.setLayout(new FlowLayout(FlowLayout.LEFT));
-    	
-    	this.pannelLogin.add(this.buttonConn);
-    	this.pannelLogin.setLayout(new FlowLayout(FlowLayout.LEFT));
-    	
-    	this.pannelLogInfo.add(scroll);
-    	this.pannelLogInfo.setLayout(new FlowLayout(FlowLayout.LEFT));
-    	
-    	this.pannelDownload.add(this.textJsonFile);
-    	this.pannelDownload.add(this.buttonOpenFile);
-    	this.pannelDownload.add(this.buttonPushMsg);
-    	this.pannelDownload.setLayout(new FlowLayout(FlowLayout.LEFT));
-    	
-    	
-    	this.add(this.pannelMqttSrv);
-    	this.add(this.pannelGwID);
-    	this.add(this.pannelUser);
-    	this.add(this.pannelPwd);
-    	this.add(this.pannelLogin);
-    	this.add(this.pannelLogInfo);	
-    	this.add(this.pannelDownload);	
-    	
-    	String strMqttSrv = EslConfig.getPropertyValue(CFG_MQTT_SRV_URL, mMqttClient.getHostAddr());
-    	this.textMqttSrv.setText(strMqttSrv);
-    	
-    	String strMqttPublishTopic = EslConfig.getPropertyValue(CFG_MQTT_PUBLISH_TOPIC, mMqttClient.getPublishTopic());
-    	this.textGwID.setText(strMqttPublishTopic);
-    	
-    	String strMqttUserName = EslConfig.getPropertyValue(CFG_MQTT_USR_NAME, mMqttClient.getUserName());
-    	this.textMqttUser.setText(strMqttUserName);
-    	
-    	String strMqttUserPassword = EslConfig.getPropertyValue(CFG_MQTT_USR_PASSWORD, mMqttClient.getPassword());
-    	this.textMqttPwd.setText(strMqttUserPassword);
-    	addClickListener();
-    }
-    
-    private void addClickListener()
-    {
-    	buttonConn.addActionListener(new ActionListener(){
-    		 public void actionPerformed(ActionEvent e) {
-    			 String strMqttSrvAddr = textMqttSrv.getText();
-    			 String strMqttPublishTopic = textGwID.getText();
-    			 String strMqttUser = textMqttUser.getText();
-    			 String strMqttPwd = textMqttPwd.getText();
-    			 
-    			 if (!mMqttClient.isConnected())
-    			 {
-    				 EslConfig.savePropertyValue(CFG_MQTT_USR_PASSWORD, strMqttPwd);
-    				 EslConfig.savePropertyValue(CFG_MQTT_USR_NAME, strMqttUser);
-    				 EslConfig.savePropertyValue(CFG_MQTT_PUBLISH_TOPIC, strMqttPublishTopic);
-    				 EslConfig.savePropertyValue(CFG_MQTT_SRV_URL, strMqttSrvAddr);
-    				 
-    				 mMqttClient.setConnectinInfo(strMqttSrvAddr, strMqttPublishTopic, strMqttUser, strMqttPwd);
-    				 mMqttClient.connect();
-    			 }
-             }
-        });
-    	
-    	
-    	buttonOpenFile.addActionListener(new ActionListener(){
-      		 public void actionPerformed(ActionEvent e)
-      		 {
-      			openJsonFile();
-      		 }
-          });
-    	
-    	buttonPushMsg.addActionListener(new ActionListener(){
-     		 public void actionPerformed(ActionEvent e)
-     		 {
-     			 String strJsonFileName = textJsonFile.getText();
-     			 if (strJsonFileName == null)
-     			 {
-     				textLogInfo.append("File not exist");
-     				return;
-     			 }
-     			 
-     			 try
-     			 {
-	     			 File file = new File(strJsonFileName);
-	     			 
-	     			 //save config
-	     			 String strDirectory = file.getParent();
-	     			 EslConfig.savePropertyValue(LAST_LOAD_JSON_FILE_PATH, strDirectory);
-	     		    
-	     			 String encoding = "GBK";
-	     			 if (file.isFile() && file.exists()) 
-	     			 { 
-	     		        InputStreamReader read = new InputStreamReader(
-	     		        		new FileInputStream(file), encoding);//考虑到编码格式
-	     		        BufferedReader bufferedReader = new BufferedReader(read);
-	     		        String lineTxt = bufferedReader.readLine();
-	     		        read.close();
-	     		        if (lineTxt.length() > 0)
-	     		        {
-	     		        	System.out.println("read file, length:" + lineTxt.length());
-	     		        	mMqttClient.pubCommand2Gateway(lineTxt);
-	     		        }
-	     			 } 
-	     			 else 
-	     			 {
-	     		        System.out.println("File not exist");
-	     			 }
-	     		} catch (Exception excpt) {
-	     		   excpt.printStackTrace();
-	     		} 
- 			 }
-         });
-    }
-    
-    public boolean openJsonFile()
-    {
-	    JFileChooser fileChooser = new JFileChooser();
-	    
-	    String strLastDirectory = EslConfig.getPropertyValue(LAST_LOAD_JSON_FILE_PATH, ".");
-	    fileChooser.setCurrentDirectory(new File(strLastDirectory));
-	    fileChooser.setAcceptAllFileFilterUsed(false);
-	
-	    final String[]fileEName = { ".json", "JSON文件(*.json)" };
-	    fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
-	    	public boolean accept(File file) 
-	    	{ 
-	    		if (file.getName().endsWith(fileEName[0]) || file.isDirectory()) 
-	    		{
-	    			return true;
-	    		}
-	   
-	    		return false;
-	    	}
-	    	
-	    	public String getDescription() 
-	    	{
-	    		return fileEName[1];
-	    	}
-	     });
-	
-	    if (JFileChooser.APPROVE_OPTION == fileChooser.showDialog(null, null))
-	    {
-		    String strJsonFile = fileChooser.getSelectedFile().getAbsolutePath();  
-		    textJsonFile.setText(strJsonFile);
-	    }
-	    
-	    return true;
-    }
-    
+	JSONObject mJsonMsg = null;
+
+	public static final int QRCODE_WIDTH = 90;
+	public static final int QRCODE_PICTURE_ID = 3;
+
+	public EslPannel() {
+
+		mMqttClient = new BeaconMqttClient(this);
+
+		this.setLayout(new GridLayout(3, 1)); // 网格式布局
+
+		// mqtt address
+		JPanel pannelMqttInfo = new JPanel();
+		pannelMqttInfo.setLayout(new GridLayout(5, 1));
+		this.add(pannelMqttInfo);
+		JLabel labelMqttSrv = new JLabel("Address");
+		this.textMqttSrv = new JTextField(30);
+		JPanel pannelMqttSrv = new JPanel();
+		pannelMqttSrv.add(labelMqttSrv);
+		pannelMqttSrv.add(this.textMqttSrv);
+		pannelMqttSrv.setLayout(new FlowLayout(FlowLayout.LEFT));
+		pannelMqttInfo.add(pannelMqttSrv);
+
+		// mqtt subsribe topic
+		JLabel labelGwID = new JLabel("Subscribe");
+		this.textGwID = new JTextField(30);
+		JPanel pannelGwID = new JPanel();
+		pannelGwID.add(labelGwID);
+		pannelGwID.add(this.textGwID);
+		pannelGwID.setLayout(new FlowLayout(FlowLayout.LEFT));
+		pannelMqttInfo.add(pannelGwID);
+
+		// user name
+		JLabel labelMqttUser = new JLabel("User Name");
+		this.textMqttUser = new JTextField(10);
+		JPanel pannelUser = new JPanel();
+		pannelUser.add(labelMqttUser);
+		pannelUser.add(this.textMqttUser);
+		pannelUser.setLayout(new FlowLayout(FlowLayout.LEFT));
+		pannelMqttInfo.add(pannelUser);
+
+		// user password
+		JLabel labelMqttPwd = new JLabel("User Pwd");
+		this.textMqttPwd = new JTextField(10);
+		JPanel pannelPwd = new JPanel();
+		pannelPwd.add(labelMqttPwd);
+		pannelPwd.add(this.textMqttPwd);
+		pannelPwd.setLayout(new FlowLayout(FlowLayout.LEFT));
+		pannelMqttInfo.add(pannelPwd);
+
+		// connect
+		this.buttonConn = new JButton("Connect");
+		JPanel pannelLogin = new JPanel();
+		pannelLogin.add(this.buttonConn);
+		pannelLogin.setLayout(new FlowLayout(FlowLayout.LEFT));
+		pannelMqttInfo.add(pannelLogin);
+
+		// log info
+		this.textLogInfo = new JTextArea(10, 50);
+		JScrollPane scroll = new JScrollPane(textLogInfo);
+		scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+		JPanel pannelLogInfo = new JPanel();
+		pannelLogInfo.setLayout(new FlowLayout(FlowLayout.LEFT));
+		pannelLogInfo.add(scroll);
+		this.add(pannelLogInfo);
+		
+		
+		// mac address
+		JPanel devicePannel = new JPanel();
+		devicePannel.setLayout(new GridLayout(5, 1));
+		this.add(devicePannel);
+		JLabel labelDeviceID = new JLabel("Device ID");
+		this.textDeviceID = new JTextField(10);
+		JPanel pannelDeviceID = new JPanel();
+		pannelDeviceID.add(labelDeviceID);
+		pannelDeviceID.add(this.textDeviceID);
+		JLabel eslType = new JLabel("ESL Type");
+		this.comboSizeTypeBox = new JComboBox(); // ESL type
+		this.comboSizeTypeBox.addItem("29 1color");
+		this.comboSizeTypeBox.addItem("29 3color");
+		this.comboSizeTypeBox.addItem("42 1color");
+		this.comboSizeTypeBox.addItem("42 3color");
+		this.comboSizeTypeBox.addItem("21 1color");
+		this.comboSizeTypeBox.addItem("21 3color");
+		this.comboSizeTypeBox.addItem("22 3color");
+		pannelDeviceID.add(eslType);
+		pannelDeviceID.add(this.comboSizeTypeBox);
+		pannelDeviceID.setLayout(new FlowLayout(FlowLayout.LEFT));
+		devicePannel.add(pannelDeviceID);
+
+		// download info
+		this.textJsonFile = new JTextField(30);
+		this.buttonOpenFile = new JButton("OpenBmpFile");
+		JPanel pannelOpenFile = new JPanel();
+		pannelOpenFile.add(this.textJsonFile);
+		pannelOpenFile.add(this.buttonOpenFile);
+		pannelOpenFile.setLayout(new FlowLayout(FlowLayout.LEFT));
+		devicePannel.add(pannelOpenFile);
+		
+		//qr code download
+		JPanel pannelDownload = new JPanel();
+		this.buttonPushMsg = new JButton("Down Picture");
+		this.buttonQRCode = new JButton("Add QR Code");
+		pannelDownload.add(this.buttonPushMsg);
+		pannelDownload.add(this.buttonQRCode);
+		this.buttonQRCode.setEnabled(false);
+		this.buttonPushMsg.setEnabled(false);
+		pannelDownload.setLayout(new FlowLayout(FlowLayout.LEFT));
+		devicePannel.add(pannelDownload);
+
+		String strMqttSrv = EslConfig.getPropertyValue(CFG_MQTT_SRV_URL,
+				mMqttClient.getHostAddr());
+		this.textMqttSrv.setText(strMqttSrv);
+
+		String strMqttPublishTopic = EslConfig.getPropertyValue(
+				CFG_MQTT_PUBLISH_TOPIC, mMqttClient.getPublishTopic());
+		this.textGwID.setText(strMqttPublishTopic);
+
+		String strMqttUserName = EslConfig.getPropertyValue(CFG_MQTT_USR_NAME,
+				mMqttClient.getUserName());
+		this.textMqttUser.setText(strMqttUserName);
+
+		String strMqttUserPassword = EslConfig.getPropertyValue(
+				CFG_MQTT_USR_PASSWORD, mMqttClient.getPassword());
+		this.textMqttPwd.setText(strMqttUserPassword);
+		addClickListener();
+	}
+
+	private void addClickListener() {
+		buttonConn.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				startConnectCloud();
+			}
+		});
+
+		buttonOpenFile.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				openBmpFile();
+			}
+		});
+
+		buttonPushMsg.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				String strJsonFileName = textJsonFile.getText();
+				if (strJsonFileName == null) {
+					textLogInfo.append("File not exist");
+					return;
+				}
+				
+				downBmpFile2Device(strJsonFileName);
+			}
+		});
+		
+		buttonQRCode.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				downQRCodeToDevice();
+			}
+		});
+	}
+
+	private boolean downBmpFile2Device(String strFilePath) {
+		try {
+			if (textDeviceID.getText().length() != 12) {
+				textLogInfo.append("device id is null\r\n");
+				return false;
+			}
+
+			int nESLType = this.comboSizeTypeBox.getSelectedIndex();
+			MTagType tagType = MTagType.MTagTypeFromID(nESLType);
+			if (tagType == null) {
+				System.out.println("please select ESL Type");
+				return false;
+			}
+			File file = new File(strFilePath);
+			
+			//save path
+			String strDirectory = file.getParent();
+			EslConfig.savePropertyValue(LAST_LOAD_JSON_FILE_PATH,
+					strDirectory);
+			
+			//download file
+			if (file.isFile() && file.exists()) {
+				
+				Pic2MqttDataService dataService = new Bmp2MqttDataService();
+				String bmpZipString = dataService.getCompressData(file, tagType,
+						124, 0);
+				
+				mJsonMsg = new JSONObject();
+				mJsonMsg.put("msg", "dData");
+				mJsonMsg.put("mac", textDeviceID.getText());
+				mJsonMsg.put("seq", mMsgSequence++);
+				mJsonMsg.put("auth1", "00000000");
+				mJsonMsg.put("dType", "ascii");
+				mJsonMsg.put("data", bmpZipString);
+
+				mMqttClient.pubCommand2Gateway(mJsonMsg.toString());
+			} else {
+				System.out.println("File not exist");
+			}
+		} catch (Exception excpt) {
+			excpt.printStackTrace();
+		}
+
+		return false;
+	}
+
+	private void downQRCodeToDevice() {
+		try {
+			if (textDeviceID.getText().length() != 12) {
+				System.out.println("device id length invalid");
+				return;
+			}
+			
+			//get esl type
+			int nESLType = this.comboSizeTypeBox.getSelectedIndex();
+			MTagType tagType = MTagType.MTagTypeFromID(nESLType);
+			if (tagType == null) {
+				System.out.println("please select ESL Type");
+				return;
+			}
+			
+		    //create qrcode bmp file
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			CreateQRCode.createQRcode(textDeviceID.getText(), outputStream);
+
+			// create refresh block head
+			PicturePartRefreshStru refreshStru = new PicturePartRefreshStru();
+			refreshStru.lcdType = tagType;
+			if (refreshStru.lcdType == null) {
+				return;
+			}
+			refreshStru.nPartRefreshBkgColor = MTagType.LcdColorTranspant;
+			refreshStru.nPictrueID = QRCODE_PICTURE_ID;
+			refreshStru.nPictureNode = 0;
+			refreshStru.appendRefreshBlock(0, 0, QRCODE_WIDTH, QRCODE_WIDTH,
+					refreshStru.lcdType.getWidth() - QRCODE_WIDTH - 5, 5);
+
+			//Convert QR code pictures to the message format required by ESL.
+			Pic2MqttDataService dataService = new Bmp2MqttDataService();
+			ByteArrayInputStream qrCodeStream = new ByteArrayInputStream(
+					outputStream.toByteArray());
+			outputStream.close();
+			String bmpData = dataService.getPartionalCompressData(qrCodeStream,
+					refreshStru);
+			qrCodeStream.close();
+
+			//send the json message to device
+			mJsonMsg = new JSONObject();
+			mJsonMsg.put("msg", "dData");
+			mJsonMsg.put("mac", textDeviceID.getText());
+			mJsonMsg.put("seq", mMsgSequence++);
+			mJsonMsg.put("auth1", "00000000");
+			mJsonMsg.put("dType", "ascii");
+			mJsonMsg.put("data", bmpData);
+			mMqttClient.pubCommand2Gateway(mJsonMsg.toString());
+		} catch (Exception excpt) {
+			excpt.printStackTrace();
+		}
+	}
+
+	public boolean openBmpFile() {
+		JFileChooser fileChooser = new JFileChooser();
+
+		String strLastDirectory = EslConfig.getPropertyValue(
+				LAST_LOAD_JSON_FILE_PATH, ".");
+		fileChooser.setCurrentDirectory(new File(strLastDirectory));
+		fileChooser.setAcceptAllFileFilterUsed(false);
+
+		final String[] fileEName = { ".bmp", "bmp file(*.bmp)" };
+		fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
+			public boolean accept(File file) {
+				if (file.getName().endsWith(fileEName[0]) || file.isDirectory()) {
+					return true;
+				}
+
+				return false;
+			}
+
+			public String getDescription() {
+				return fileEName[1];
+			}
+		});
+
+		if (JFileChooser.APPROVE_OPTION == fileChooser.showDialog(null, null)) {
+			String strJsonFile = fileChooser.getSelectedFile()
+					.getAbsolutePath();
+			textJsonFile.setText(strJsonFile);
+		}
+
+		return true;
+	}
+
+	private void startConnectCloud() {
+		String strMqttSrvAddr = textMqttSrv.getText();
+		String strMqttPublishTopic = textGwID.getText();
+		String strMqttUser = textMqttUser.getText();
+		String strMqttPwd = textMqttPwd.getText();
+
+		if (!mMqttClient.isConnected()) {
+			EslConfig.savePropertyValue(CFG_MQTT_USR_PASSWORD, strMqttPwd);
+			EslConfig.savePropertyValue(CFG_MQTT_USR_NAME, strMqttUser);
+			EslConfig.savePropertyValue(CFG_MQTT_PUBLISH_TOPIC,
+					strMqttPublishTopic);
+			EslConfig.savePropertyValue(CFG_MQTT_SRV_URL, strMqttSrvAddr);
+
+			mMqttClient.setConnectinInfo(strMqttSrvAddr, strMqttPublishTopic,
+					strMqttUser, strMqttPwd);
+			mMqttClient.connect();
+		}
+	}
 
 	@Override
 	public void connectionNotify(MqttConnNotify.ConnectionNotify connNtf) {
 		// TODO Auto-generated method stub
-		if (connNtf == ConnectionNotify.CONN_NTF_CONNECED)
-		{
+		if (connNtf == ConnectionNotify.CONN_NTF_CONNECED) {
 			buttonConn.setEnabled(false);
+
 			textLogInfo.append("Mqtt Server connected\r\n");
-		}
-		else if (connNtf == ConnectionNotify.CONN_NTF_DISCONNECTED)
-		{
+		} else if (connNtf == ConnectionNotify.CONN_NTF_DISCONNECTED) {
 			buttonConn.setEnabled(true);
 			buttonPushMsg.setEnabled(false);
+			buttonQRCode.setEnabled(false);
 			textLogInfo.append("Mqtt Server disconnected\r\n");
-		}
-		else if (connNtf == ConnectionNotify.CONN_SHAKE_SUCCESS)
-		{
+			// wait and reconnect
+			Timer timer = new Timer();
+			timer.schedule(new TimerTask() {
+				@Override
+				public void run() {
+					startConnectCloud();
+				}
+			}, 10000);
+		} else if (connNtf == ConnectionNotify.CONN_SHAKE_SUCCESS) {
 			buttonPushMsg.setEnabled(true);
+			buttonQRCode.setEnabled(true);
+			mShakeWithGwSucc = true;
 			textLogInfo.append("Gateway shake success\r\n");
 		}
 	}
 
 	@Override
-	public void actionNotify(MqttConnNotify.ActionNotify downNtf, Object obj) {
+	public void actionNotify(MqttConnNotify.ActionNotify downNtf,
+			String strDeviceMac, Object obj) {
 		// TODO Auto-generated method stub
-		if (downNtf == ActionNotify.MSG_DOWNLOAD_SUCCESS)
-		{
-			if (obj != null)
-			{
-				EslObject eslObj = (EslObject)obj;
-				textLogInfo.append(eslObj.mMacAddress + ", download msg succ\r\n");
+		String strDownloadMac = null;
+
+		if (downNtf == ActionNotify.MSG_DOWNLOAD_SUCCESS) {
+			if (obj != null) {
+				EslObject eslObj = (EslObject) obj;
+				eslObj.mDownJsonNum++;
+				textLogInfo
+						.append(getCurrentTime() + strDeviceMac
+								+ ", download msg succ:" + eslObj.mDownJsonNum
+								+ "\r\n");
 			}
-		}
-		else if (downNtf == ActionNotify.FOUND_DEVICE)
-		{
-			if (obj != null)
-			{
-				EslObject eslObj = (EslObject)obj;
-				textLogInfo.append(eslObj.mMacAddress + ", found new device succ\r\n");
+		} else if (downNtf == ActionNotify.FOUND_DEVICE) {
+			if (obj != null) {
+				EslObject eslObj = (EslObject) obj;
+				MTagType tagType = MTagType.MTagTypeFromID(eslObj.mEslType);
+				textLogInfo.append(getCurrentTime() + eslObj.mMacAddress
+						+ ", found new device:" + tagType.getName() + "\r\n");
 			}
-		}
-		else if (downNtf == ActionNotify.MSG_EXECUTE_SUCCESS)
-		{
-			if (obj != null)
-			{
-				EslObject eslObj = (EslObject)obj;
-				textLogInfo.append(eslObj.mMacAddress + ", execute msg succ\r\n");
+		} else if (downNtf == ActionNotify.DEVICE_UPDATE) {
+
+		} else if (downNtf == ActionNotify.MSG_EXECUTE_SUCCESS) {
+			if (obj != null) {
+				EslObject eslObj = (EslObject) obj;
+				textLogInfo.append(getCurrentTime() + eslObj.mMacAddress
+						+ ", execute msg succ:" + eslObj.mDownSuccNum + "\r\n");
+				eslObj.mDownSuccNum++;
+				strDownloadMac = eslObj.mMacAddress;
 			}
-		}
-		else if (downNtf == ActionNotify.MSG_EXECUTE_FAIL)
-		{
-			if (obj != null)
-			{
-				EslObject eslObj = (EslObject)obj;
-				textLogInfo.append(eslObj.mMacAddress + ", execute msg failed, err:" + eslObj.mCommandCause + "\r\n");
+		} else if (downNtf == ActionNotify.MSG_EXECUTE_FAIL) {
+			if (obj != null) {
+				EslObject eslObj = (EslObject) obj;
+				textLogInfo.append(getCurrentTime() + eslObj.mMacAddress
+						+ ", execute msg failed, err:" + eslObj.mCommandCause
+						+ ", num:" + eslObj.mDownFailNum + "\r\n");
+				eslObj.mDownFailNum++;
+				eslObj.mExeCmdState = EXE_CMD_FAIL;
+			}
+		} else if (downNtf == ActionNotify.MSG_SHAKE_REQs) {
+			if (obj != null) {
+				EslShakeReq shakeReq = (EslShakeReq) obj;
+				System.out.println(getCurrentTime()
+						+ "receive Gw shake msg, adv num:"
+						+ shakeReq.mAdvBuffDevNum + ", msg num:"
+						+ shakeReq.mBuffDownMsgNum);
 			}
 		}
 	}
+
+	private String getCurrentTime() {
+		long nCurrentTime = System.currentTimeMillis();
+
+		Date date = new Date(nCurrentTime);
+		return DATE_FORMAT.format(date) + " ";
+	}
+
+	private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat(
+			"yyyy-MM-dd HH:mm:ss");
 }

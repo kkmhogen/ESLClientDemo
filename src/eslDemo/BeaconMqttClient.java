@@ -16,7 +16,7 @@ public class BeaconMqttClient
     private  String mPassWord = "testpassword";
     
     private MqttClient mClient;  
-    private MqttConnectOptions options;  
+    private MqttConnectOptions options;
     private String clientid = "clientCloudSave";  
     
     private boolean IsConnected = false;
