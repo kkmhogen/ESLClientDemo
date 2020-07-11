@@ -10,7 +10,7 @@ With this SDK, you can scan and update the ESL device. The SDK include follow ma
 
 * pic2mqttdata package library: Responsible for converting bmp pictures content to ESL pixels format required by ESL.
 
-![architecture](picture/sdk_architecture.png "architecture")
+![avatar](https://github.com/kkmhogen/ESLClientDemo/blob/master/picture/sdk_architecture.png?raw=true)
 
 ## 2. How to test this Demo
 please referance document <<HowToTestThisDemo.docx>>
@@ -172,7 +172,7 @@ private boolean downBmpFile2Device(String strFilePath) {
 
 ### 3.3 Partional picture update
 Sometimes the app only need update partional picture. For example, the cloud only need to download the price area pixels dots when price changed.  
-![partional update](picture/partional_update.png "partional update")
+![avatar](https://github.com/kkmhogen/ESLClientDemo/blob/master/picture/partional_update.png?raw=true)
 
 Example for download QR code to device
 ```Java
