@@ -81,7 +81,6 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 
 	JSONObject mJsonMsg = null;
 
-	public static final int QRCODE_WIDTH = 90;
 	public static final int QRCODE_PICTURE_ID = 3;
 
 	public EslPannel() {
@@ -313,8 +312,8 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 			refreshStru.nPartRefreshBkgColor = MTagType.LcdColorTranspant;
 			refreshStru.nPictrueID = QRCODE_PICTURE_ID;
 			refreshStru.nPictureNode = 0;
-			refreshStru.appendRefreshBlock(0, 0, QRCODE_WIDTH, QRCODE_WIDTH,
-					refreshStru.lcdType.getWidth() - QRCODE_WIDTH - 5, 5);
+			refreshStru.appendRefreshBlock(0, 0, CreateQRCode.QRCODE_WIDTH, CreateQRCode.QRCODE_WIDTH,
+					refreshStru.lcdType.getWidth() - CreateQRCode.QRCODE_WIDTH - 2, 2);
 
 			//Convert QR code pictures to the message format required by ESL.
 			Pic2MqttDataService dataService = new Bmp2MqttDataService();

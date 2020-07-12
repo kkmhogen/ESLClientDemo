@@ -13,6 +13,9 @@ import java.io.OutputStream;
  */
 public class CreateQRCode 
 {
+    public static final int QRCODE_LEVEL =3;
+	public static final int QRCODE_WIDTH = 90;
+
     public static void createQRcode(String qrData, File outputFile) throws IOException {
 
     	BufferedImage imageBuffer = createQRcode(qrData);
@@ -31,9 +34,8 @@ public class CreateQRCode
     {
     	//计算二维码图片的高宽比
         // API文档规定计算图片宽高的方式 ，v是本次测试的版本号
-        int v =3;
-        int width = 66 + 12 * (v - 1);
-        int height = 66 + 12 * (v - 1);
+        int width = 66 + 12 * (QRCODE_LEVEL - 1);
+        int height = 66 + 12 * (QRCODE_LEVEL - 1);
 
 
         Qrcode x = new Qrcode();
@@ -44,9 +46,9 @@ public class CreateQRCode
          * level Q : 最大 25% 的错误能够被纠正；
          * level H : 最大 30% 的错误能够被纠正；
          */
-        x.setQrcodeErrorCorrect('L');
+        x.setQrcodeErrorCorrect('H');
         x.setQrcodeEncodeMode('B');//注意版本信息 N代表数字 、A代表 a-z,A-Z、B代表 其他)
-        x.setQrcodeVersion(v);//版本号  1-40
+        x.setQrcodeVersion(QRCODE_LEVEL);//版本号  1-40
 
         byte[] d = qrData.getBytes("utf-8");//汉字转格式需要抛出异常
 
