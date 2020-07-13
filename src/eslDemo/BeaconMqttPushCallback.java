@@ -12,15 +12,16 @@ import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
+import eslDemo.MqttEventNotify.ActionNotify;
+import eslDemo.MqttEventNotify.ConnectionNotify;
+
 import pic2mqttdata.MTagType;
 
-import eslDemo.MqttConnNotify.ActionNotify;
-import eslDemo.MqttConnNotify.ConnectionNotify;
 
 public class BeaconMqttPushCallback implements MqttCallback {  
     private static int DEF_REQ_DATA_MAX_LENGHT = 1024*60;
     BeaconMqttClient mClient;
-    MqttConnNotify mMqttNotify;
+    MqttEventNotify mMqttNotifyHandler;
     
     public static final int ERR_INVALID_INPUT = 1;
    	public static final int ERR_PARSE_SUCCESS = 0;
@@ -56,24 +57,32 @@ public class BeaconMqttPushCallback implements MqttCallback {
    	};
    	private HashMap<String, EslObject> mDeviceMap = new HashMap<>();
     
-    BeaconMqttPushCallback(BeaconMqttClient conn, MqttConnNotify mqttNotify){
+    BeaconMqttPushCallback(BeaconMqttClient conn, MqttEventNotify mqttNotify){
     	mClient = conn;
-    	mMqttNotify = mqttNotify;
+    	mMqttNotifyHandler = mqttNotify;
     }
     
     public String getGatewaySubAction()
     {
     	return mGatewaySubaction;
     }
+    
+    public void connectionConnected() {  
+        //connection lost, now reconnect
+        mClient.setConnected(true); 
+
+        mMqttNotifyHandler.connectionNotify(ConnectionNotify.CONN_NTF_CONNECED);
+    }  
 
     public void connectionLost(Throwable cause) {  
         //connection lost, now reconnect
         System.err.println("MQTT client connection disconnected");
-        mClient.setConnected(false);
+        mClient.setConnected(false); 
         
         mGatewaySubaction = null;
         mGatewayPubaction = null;
-        mMqttNotify.connectionNotify(ConnectionNotify.CONN_NTF_DISCONNECTED);
+        
+        mMqttNotifyHandler.connectionNotify(ConnectionNotify.CONN_NTF_DISCONNECTED);
     }  
     
     public void deliveryComplete(IMqttDeliveryToken token) {
@@ -208,14 +217,14 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				mClient.reNewSubscribe(mGatewayPubaction);
 				
 				System.out.println("shake with Gateway success");
-				mMqttNotify.connectionNotify(ConnectionNotify.CONN_SHAKE_SUCCESS);
+				mMqttNotifyHandler.connectionNotify(ConnectionNotify.CONN_SHAKE_SUCCESS);
 			}
 			else
 			{
 				EslShakeReq shakeReq = new EslShakeReq();
 				shakeReq.mAdvBuffDevNum = cmdReqAgent.optInt("advDevices", -1);
 				shakeReq.mBuffDownMsgNum = cmdReqAgent.optInt("downDevices", -1);
-				mMqttNotify.actionNotify(MqttConnNotify.ActionNotify.MSG_SHAKE_REQs, 
+				mMqttNotifyHandler.actionNotify(ActionNotify.MSG_SHAKE_REQs, 
 						strGwAddress, shakeReq);
 			}
 			
@@ -293,7 +302,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				}
 			
 				EslObject eslObj = mDeviceMap.get(strDevMac);
-				ActionNotify nNotify = MqttConnNotify.ActionNotify.DEVICE_UPDATE;
+				ActionNotify nNotify = ActionNotify.DEVICE_UPDATE;
 				if (eslObj == null)
 				{
 					MTagType eslType = MTagType.MTagTypeFromID(nEslType);
@@ -304,7 +313,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
 					eslObj = new EslObject();
 					eslObj.mMacAddress = strDevMac;
 					eslObj.mEslType = eslType;
-					nNotify = MqttConnNotify.ActionNotify.FOUND_DEVICE;
+					nNotify = ActionNotify.FOUND_DEVICE;
 					mDeviceMap.put(strDevMac, eslObj);
 				}
 				
@@ -316,7 +325,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
 				eslObj.mEslTemperature = obj.getInt("temp");
 				eslObj.mPictureID = obj.getInt("picID");
 				
-				if (MqttConnNotify.ActionNotify.FOUND_DEVICE == nNotify)
+				if (ActionNotify.FOUND_DEVICE == nNotify)
 				{
 					System.out.println(getCurrentTime() + " Found new ESL,ID:" + strDevMac 
 							+ ",Rssi:" + nRssi
@@ -327,7 +336,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
 							+ ",PictureID:" + (int)eslObj.mPictureID);
 				}
 				
-				mMqttNotify.actionNotify(nNotify, strDevMac, eslObj);
+				mMqttNotifyHandler.actionNotify(nNotify, strDevMac, eslObj);
 			}
 		} 
 		catch (Exception e) 
@@ -394,20 +403,20 @@ public class BeaconMqttPushCallback implements MqttCallback {
 			{
 				if (nCause == 1)
 				{
-					System.out.println(getCurrentTime() + "download data to " + strDevMac + " success:" + nSequence);
-					this.mMqttNotify.actionNotify(ActionNotify.MSG_DOWNLOAD_SUCCESS, strDevMac, eslObj);
+					System.out.println(getCurrentTime() + "download data to " + strDevMac + " success, seq:" + nSequence);
+					this.mMqttNotifyHandler.actionNotify(ActionNotify.MSG_DOWNLOAD_SUCCESS, strDevMac, eslObj);
 				}
 				else
 				{
-					System.out.println(getCurrentTime() + "execute command to " + strDevMac + " success:" + nSequence);
-					this.mMqttNotify.actionNotify(ActionNotify.MSG_EXECUTE_SUCCESS, strDevMac, eslObj);
+					System.out.println(getCurrentTime() + "execute command to " + strDevMac + " success, seq:" + nSequence);
+					this.mMqttNotifyHandler.actionNotify(ActionNotify.MSG_EXECUTE_SUCCESS, strDevMac, eslObj);
 				}
 			}
 			else
 			{
 				System.out.println(getCurrentTime() + "execute command to " + strDevMac + " failed:" 
 							+ nCause + ",seq:" + nSequence);
-				this.mMqttNotify.actionNotify(ActionNotify.MSG_EXECUTE_FAIL, strDevMac, eslObj);
+				this.mMqttNotifyHandler.actionNotify(ActionNotify.MSG_EXECUTE_FAIL, strDevMac, eslObj);
 			}
 		}
 		catch (Exception e) 

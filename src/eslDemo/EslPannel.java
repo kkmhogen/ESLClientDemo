@@ -1,26 +1,14 @@
 package eslDemo;
 
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -39,25 +27,14 @@ import pic2mqttdata.bmp.Bmp2MqttDataService;
 import pic2mqttdata.bmp.PicturePartRefreshStru;
 
 
-import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
 
 import eslDemo.BeaconMqttPushCallback.EslObject;
 import eslDemo.BeaconMqttPushCallback.EslShakeReq;
+import eslDemo.MqttEventNotify.ActionNotify;
+import eslDemo.MqttEventNotify.ConnectionNotify;
 
-public class EslPannel extends JPanel implements MqttConnNotify {
-
-	/**
-	 * 
-	 */
-	private static int EXE_CMD_IDLE = 0;
-	private static int EXE_CMD_DOING = 1;
-	private static int EXE_CMD_SUCC = 2;
-	private static int EXE_CMD_FAIL = 3;
-
-	private static int MAX_DOWN_INTERVAL = 5 * 60 * 1000;
-	private static int MAX_FAIL_DOWN_INTERVAL = 20 * 60 * 1000;
-
+public class EslPannel extends JPanel implements MqttEventNotify {
 	private static int mMsgSequence = 101;
 	private static final long serialVersionUID = 1L;
 
@@ -68,7 +45,8 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 	private final static String CFG_MQTT_USR_PASSWORD = "MqttPassword";
 
 	BeaconMqttClient mMqttClient; // mqtt connection
-
+	BeaconMqttPushCallback mMqttMsgHandler;  //mqtt message handler
+	
 	private JButton buttonConn, buttonOpenFile, buttonPushMsg, buttonQRCode;
 	private JTextField textMqttSrv, textGwID, textMqttUser, textMqttPwd,
 			textJsonFile, textDeviceID;
@@ -83,10 +61,13 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 
 	public static final int QRCODE_PICTURE_ID = 3;
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public EslPannel() {
 
-		mMqttClient = new BeaconMqttClient(this);
-
+		mMqttClient = new BeaconMqttClient(); 
+    	mMqttMsgHandler = new BeaconMqttPushCallback(mMqttClient, this);
+    	mMqttClient.setMsgHandler(mMqttMsgHandler);
+    	
 		this.setLayout(new GridLayout(3, 1)); // 网格式布局
 
 		// mqtt address
@@ -390,7 +371,7 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 	}
 
 	@Override
-	public void connectionNotify(MqttConnNotify.ConnectionNotify connNtf) {
+	public void connectionNotify(ConnectionNotify connNtf) {
 		// TODO Auto-generated method stub
 		if (connNtf == ConnectionNotify.CONN_NTF_CONNECED) {
 			buttonConn.setEnabled(false);
@@ -418,10 +399,8 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 	}
 
 	@Override
-	public void actionNotify(MqttConnNotify.ActionNotify downNtf,
-			String strDeviceMac, Object obj) {
+	public void actionNotify(ActionNotify downNtf, String strDeviceMac, Object obj) {
 		// TODO Auto-generated method stub
-		String strDownloadMac = null;
 
 		if (downNtf == ActionNotify.MSG_DOWNLOAD_SUCCESS) {
 			if (obj != null) {
@@ -446,7 +425,6 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 				textLogInfo.append(getCurrentTime() + eslObj.mMacAddress
 						+ ", execute msg succ:" + eslObj.mDownSuccNum + "\r\n");
 				eslObj.mDownSuccNum++;
-				strDownloadMac = eslObj.mMacAddress;
 			}
 		} else if (downNtf == ActionNotify.MSG_EXECUTE_FAIL) {
 			if (obj != null) {
@@ -455,7 +433,6 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 						+ ", execute msg failed, err:" + eslObj.mCommandCause
 						+ ", num:" + eslObj.mDownFailNum + "\r\n");
 				eslObj.mDownFailNum++;
-				eslObj.mExeCmdState = EXE_CMD_FAIL;
 			}
 		} else if (downNtf == ActionNotify.MSG_SHAKE_REQs) {
 			if (obj != null) {

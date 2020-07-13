@@ -1,6 +1,6 @@
 package eslDemo;
 
-public abstract interface MqttConnNotify {
+public abstract interface MqttEventNotify {
 	public enum ConnectionNotify
 	{
 		CONN_NTF_CONNECED,    //conn mqtt srv success

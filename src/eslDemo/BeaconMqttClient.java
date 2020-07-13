@@ -6,7 +6,6 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 import eslDemo.BeaconMqttPushCallback;
 
-import eslDemo.MqttConnNotify.ConnectionNotify;
 
 public class BeaconMqttClient 
 {  
@@ -20,7 +19,6 @@ public class BeaconMqttClient
     private String clientid = "clientCloudSave";  
     
     private boolean IsConnected = false;
-    private MqttConnNotify mQttNotify;
     private BeaconMqttPushCallback mBeaconCallback;
     
     public boolean isConnected()
@@ -64,7 +62,6 @@ public class BeaconMqttClient
             options.setKeepAliveInterval(20);  
             
             // …Ë÷√ªÿµ˜  
-            mBeaconCallback = new BeaconMqttPushCallback(this, mQttNotify);
             mClient.setCallback(mBeaconCallback); 
             
         } catch (Exception e) {  
@@ -97,12 +94,14 @@ public class BeaconMqttClient
     	IsConnected = enable;
     }
     
-    public BeaconMqttClient( MqttConnNotify mqttNotify)
+    public BeaconMqttClient( )
     {
-    	
-    	mQttNotify = mqttNotify;
-    	
     	initParamaters();
+    }
+    
+    public void setMsgHandler(BeaconMqttPushCallback msgCallback)
+    {
+    	mBeaconCallback = msgCallback;
     }
   
     private void initParamaters() 
@@ -115,7 +114,7 @@ public class BeaconMqttClient
     	try { 
     		mClient.connect(options); 
 	        
-	        mQttNotify.connectionNotify(ConnectionNotify.CONN_NTF_CONNECED);
+    		mBeaconCallback.connectionConnected();
 	        
 	        IsConnected = true;
 	        System.out.println("Connect to server complete");
