@@ -435,9 +435,8 @@ public class EslPannel extends JPanel implements MqttConnNotify {
 		} else if (downNtf == ActionNotify.FOUND_DEVICE) {
 			if (obj != null) {
 				EslObject eslObj = (EslObject) obj;
-				MTagType tagType = MTagType.MTagTypeFromID(eslObj.mEslType);
 				textLogInfo.append(getCurrentTime() + eslObj.mMacAddress
-						+ ", found new device:" + tagType.getName() + "\r\n");
+						+ ", found new device:" + eslObj.mEslType.getName() + "\r\n");
 			}
 		} else if (downNtf == ActionNotify.DEVICE_UPDATE) {
 

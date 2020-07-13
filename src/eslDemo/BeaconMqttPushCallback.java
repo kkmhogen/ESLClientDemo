@@ -12,6 +12,8 @@ import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
+import pic2mqttdata.MTagType;
+
 import eslDemo.MqttConnNotify.ActionNotify;
 import eslDemo.MqttConnNotify.ConnectionNotify;
 
@@ -31,7 +33,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
    		String mMacAddress;    //device id
    		int mRssi;
    		int mFaltStatus;
-   		int mEslType;
+   		MTagType mEslType;
    		int mEslVoltage;
    		int mEslTemperature;
    		long mLastUpdateMsec;  //report time
@@ -71,8 +73,6 @@ public class BeaconMqttPushCallback implements MqttCallback {
         
         mGatewaySubaction = null;
         mGatewayPubaction = null;
-        mDeviceMap.clear();
-        
         mMqttNotify.connectionNotify(ConnectionNotify.CONN_NTF_DISCONNECTED);
     }  
     
@@ -283,27 +283,33 @@ public class BeaconMqttPushCallback implements MqttCallback {
 					}
 				}
 				
+				//esl type
+				int nEslType = obj.getInt("eslType");
+				
+				//prase data
+				if (!obj.has("type") || obj.getInt("type") != 64)
+				{
+					continue;
+				}
 			
 				EslObject eslObj = mDeviceMap.get(strDevMac);
 				ActionNotify nNotify = MqttConnNotify.ActionNotify.DEVICE_UPDATE;
 				if (eslObj == null)
 				{
+					MTagType eslType = MTagType.MTagTypeFromID(nEslType);
+					if (eslType == null){
+						return ERR_INVALID_INPUT;
+					}
+					
 					eslObj = new EslObject();
 					eslObj.mMacAddress = strDevMac;
+					eslObj.mEslType = eslType;
 					nNotify = MqttConnNotify.ActionNotify.FOUND_DEVICE;
 					mDeviceMap.put(strDevMac, eslObj);
 				}
 				
 				eslObj.mRssi = nRssi;
 				eslObj.mLastUpdateMsec = System.currentTimeMillis();
-					
-				//prase data
-				if (!obj.has("type") || obj.getInt("type") != 64)
-				{
-					continue;
-				}
-				
-				eslObj.mEslType = obj.getInt("eslType");
 				eslObj.mEslVersion = obj.getInt("ver");
 				eslObj.mFaltStatus = obj.getInt("stat");
 				eslObj.mEslVoltage = obj.getInt("vatt");
@@ -315,7 +321,7 @@ public class BeaconMqttPushCallback implements MqttCallback {
 					System.out.println(getCurrentTime() + " Found new ESL,ID:" + strDevMac 
 							+ ",Rssi:" + nRssi
 							+ ",Version:" + (int)eslObj.mEslVersion
-							+ ",EslType:" + getEslType(eslObj.mEslType)
+							+ ",EslType:" + eslObj.mEslType.getName()
 							+ ",Voltage:" + (int)eslObj.mEslVoltage + "mV"
 							+ ",Temperature:" + (int)eslObj.mEslTemperature + "¡æ"
 							+ ",PictureID:" + (int)eslObj.mPictureID);
@@ -332,44 +338,6 @@ public class BeaconMqttPushCallback implements MqttCallback {
 		return ERR_PARSE_SUCCESS;
 	}
 	
-	private String getEslType(int nType)
-	{
-		switch(nType)
-		{
-			case  0:
-			{
-				return "E029-C";
-			}
-			case 1:
-			{
-				return "E029-R";
-			}
-			case 2:
-			{
-				return "E042-C";
-			}
-			case 3:
-			{
-				return "E042-R";
-			}
-			case 4:
-			{
-				return "E021-C";
-			}
-			case 5:
-			{
-				return "E021-R";
-			}
-			case 6:
-			{
-				return "E022-R";
-			}
-			
-			default:
-				return "Unknown";
-		}
-	}
-	
 	private String getCurrentTime()
 	{
 		long nCurrentTime = System.currentTimeMillis();
@@ -380,32 +348,6 @@ public class BeaconMqttPushCallback implements MqttCallback {
 	
 	private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	
-	public static byte[] hexStringToBytes(String hexString){
-        if (hexString == null || hexString.equals("")) {
-            return null;
-        }
-        hexString = hexString.toUpperCase();
-        char []hexCharacter = hexString.toCharArray();
-        for (int i = 0; i < hexCharacter.length; i++){
-            if (-1 == charToByte(hexCharacter[i])){
-                return null;
-            }
-        }
-
-        int length = hexString.length() / 2;
-        char[] hexChars = hexString.toCharArray();
-        byte[] d = new byte[length];
-        for (int i = 0; i < length; i++) {
-            int pos = i * 2;
-            d[i] = (byte) (charToByte(hexChars[pos]) << 4 | charToByte(hexChars[pos + 1]));
-
-        }
-        return d;
-    }
-	
-	 private static byte charToByte(char c) {
-	        return (byte) "0123456789ABCDEF".indexOf(c);
-	    }
 	
 	public int handleDownloadAck(JSONObject cmdReqAgent)
 	{
