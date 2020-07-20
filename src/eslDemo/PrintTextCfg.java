@@ -9,7 +9,7 @@ public class PrintTextCfg {
 	public static int MSG_TYPE_PRINT_MAC = 6;
 	public static int ENCODE_TYPE_V2 = 2;
 	public static int FONT_TEXT_WIDTH = 8;
-	public static int FONT_TEXT_HEIGH = 8;
+	public static int FONT_TEXT_HEIGH = 16;
 
     
 	public MTagType lcdType;

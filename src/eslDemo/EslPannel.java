@@ -389,7 +389,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			
 			textCfg.nPictrueID = 1;
 			textCfg.nPictureNode = 0;
-			textCfg.nStartRow = 2;
+			textCfg.nStartRow = 1;
 			textCfg.nStartColumn = 2;
 			textCfg.strPrintText = strBleID.toUpperCase();
 			if (tagType.is3Color())
@@ -447,7 +447,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 
 			textCfg.nPictrueID = 1;
 			textCfg.nPictureNode = 0;
-			textCfg.nStartRow = 5;
+			textCfg.nStartRow = 4;
 			textCfg.nStartColumn = 2;
 			textCfg.strPrintText = "Batt:" + nBattLvls + "mv";
 			
