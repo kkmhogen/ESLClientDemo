@@ -4,9 +4,12 @@ import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Timer;
@@ -31,8 +34,6 @@ import net.sf.json.JSONObject;
 
 import eslDemo.BeaconMqttPushCallback.EslObject;
 import eslDemo.BeaconMqttPushCallback.EslShakeReq;
-import eslDemo.MqttEventNotify.ActionNotify;
-import eslDemo.MqttEventNotify.ConnectionNotify;
 
 public class EslPannel extends JPanel implements MqttEventNotify {
 	private static int mMsgSequence = 101;
@@ -41,15 +42,17 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 	private final static String CFG_MQTT_SRV_URL = "MqttSrvUrl";
 	private final static String CFG_MQTT_PUBLISH_TOPIC = "MqttPublishTopic";
 	private final static String LAST_LOAD_JSON_FILE_PATH = "LastJsonFilePath";
+	private final static String LAST_LOAD_BMP_FILE_PATH = "LastBmpFilePath";
 	private final static String CFG_MQTT_USR_NAME = "MqttUserName";
 	private final static String CFG_MQTT_USR_PASSWORD = "MqttPassword";
 
 	BeaconMqttClient mMqttClient; // mqtt connection
 	BeaconMqttPushCallback mMqttMsgHandler;  //mqtt message handler
 	
-	private JButton buttonConn, buttonOpenFile, buttonPushMsg, buttonQRCode;
+	private JButton buttonConn, buttonOpenJsonFile, buttonOpenBmpFile, buttonPushBmpMsg, buttonPushJsonMsg, 
+		buttonQRCode, buttonPrintMac, buttonPrintBattLvls;
 	private JTextField textMqttSrv, textGwID, textMqttUser, textMqttPwd,
-			textJsonFile, textDeviceID;
+			textJsonFile, textBmpFile, textDeviceID;
 	private JTextArea textLogInfo;
 	@SuppressWarnings("rawtypes")
 	private JComboBox comboSizeTypeBox;
@@ -150,22 +153,42 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 		devicePannel.add(pannelDeviceID);
 
 		// download info
+		this.textBmpFile = new JTextField(30);
+		this.buttonOpenBmpFile = new JButton("OpenBmpFile");
+		this.buttonPushBmpMsg = new JButton("Download");
+		buttonPushBmpMsg.setEnabled(false);
+		JPanel pannelOpenBmpFile = new JPanel();
+		pannelOpenBmpFile.add(this.textBmpFile);
+		pannelOpenBmpFile.add(this.buttonOpenBmpFile);
+		pannelOpenBmpFile.add(this.buttonPushBmpMsg);
+		pannelOpenBmpFile.setLayout(new FlowLayout(FlowLayout.LEFT));
+		devicePannel.add(pannelOpenBmpFile);
+		
+		// download info
 		this.textJsonFile = new JTextField(30);
-		this.buttonOpenFile = new JButton("OpenBmpFile");
-		JPanel pannelOpenFile = new JPanel();
-		pannelOpenFile.add(this.textJsonFile);
-		pannelOpenFile.add(this.buttonOpenFile);
-		pannelOpenFile.setLayout(new FlowLayout(FlowLayout.LEFT));
-		devicePannel.add(pannelOpenFile);
+		this.buttonOpenJsonFile = new JButton("OpenRawJson");
+		this.buttonPushJsonMsg = new JButton("Download");
+		buttonPushJsonMsg.setEnabled(false);
+		JPanel pannelRowJsonFile = new JPanel();
+		pannelRowJsonFile.add(this.textJsonFile);
+		pannelRowJsonFile.add(this.buttonOpenJsonFile);
+		pannelRowJsonFile.add(this.buttonPushJsonMsg);
+		pannelRowJsonFile.setLayout(new FlowLayout(FlowLayout.LEFT));
+		devicePannel.add(pannelRowJsonFile);
 		
 		//qr code download
 		JPanel pannelDownload = new JPanel();
-		this.buttonPushMsg = new JButton("Down Picture");
 		this.buttonQRCode = new JButton("Add QR Code");
-		pannelDownload.add(this.buttonPushMsg);
+		this.buttonPrintMac = new JButton("Print Mac");
+		this.buttonPrintBattLvls = new JButton("Add BattLvls");
 		pannelDownload.add(this.buttonQRCode);
+		pannelDownload.add(this.buttonPrintMac);
+		pannelDownload.add(this.buttonPrintBattLvls);
+
 		this.buttonQRCode.setEnabled(false);
-		this.buttonPushMsg.setEnabled(false);
+		this.buttonPrintMac.setEnabled(false);
+		this.buttonPrintBattLvls.setEnabled(false);
+		
 		pannelDownload.setLayout(new FlowLayout(FlowLayout.LEFT));
 		devicePannel.add(pannelDownload);
 
@@ -194,15 +217,33 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			}
 		});
 
-		buttonOpenFile.addActionListener(new ActionListener() {
+		buttonOpenJsonFile.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				openJsonFile();
+			}
+		});
+
+		buttonPushJsonMsg.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				String strJsonFileName = textJsonFile.getText();
+				if (strJsonFileName == null) {
+					textLogInfo.append("File not exist");
+					return;
+				}
+				
+				downJsonFile2Device(strJsonFileName);
+			}
+		});
+		
+		buttonOpenBmpFile.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				openBmpFile();
 			}
 		});
 
-		buttonPushMsg.addActionListener(new ActionListener() {
+		buttonPushBmpMsg.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				String strJsonFileName = textJsonFile.getText();
+				String strJsonFileName = textBmpFile.getText();
 				if (strJsonFileName == null) {
 					textLogInfo.append("File not exist");
 					return;
@@ -212,11 +253,64 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			}
 		});
 		
+		
 		buttonQRCode.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				downQRCodeToDevice();
 			}
 		});
+		
+		buttonPrintMac.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				printMacToDevice();
+			}
+		});
+		
+		buttonPrintBattLvls.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				printBattLvlsToDevice();
+			}
+		});
+	}
+	
+	private boolean downJsonFile2Device(String strFilePath) {
+		String strJsonFileName = textJsonFile.getText();
+		 if (strJsonFileName == null)
+		 {
+			textLogInfo.append("File not exist");
+			return false;
+		 }
+		 
+		try
+		 {
+		 File file = new File(strJsonFileName);
+		 
+		 //save config
+		 String strDirectory = file.getParent();
+		 EslConfig.savePropertyValue(LAST_LOAD_JSON_FILE_PATH, strDirectory);
+	    
+		 String encoding = "GBK";
+		 if (file.isFile() && file.exists()) 
+		 { 
+	        InputStreamReader read = new InputStreamReader(
+	        		new FileInputStream(file), encoding);//考虑到编码格式
+	        BufferedReader bufferedReader = new BufferedReader(read);
+	        String strJsonFileContent = bufferedReader.readLine();
+	        read.close();
+
+	        if (strJsonFileContent != null){
+	        	JSONObject jsonMsg = JSONObject.fromObject(strJsonFileContent);
+	        	if (textDeviceID.getText().length() == 12) {
+		        	jsonMsg.put("mac", textDeviceID.getText());
+				}
+				jsonMsg.put("seq", mMsgSequence++);
+				return mMqttClient.pubCommand2Gateway(jsonMsg.toString());
+	        }
+		 }
+		 }catch (Exception excpt) {
+ 		   excpt.printStackTrace();
+ 		} 
+		return false;
 	}
 
 	private boolean downBmpFile2Device(String strFilePath) {
@@ -236,7 +330,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			
 			//save path
 			String strDirectory = file.getParent();
-			EslConfig.savePropertyValue(LAST_LOAD_JSON_FILE_PATH,
+			EslConfig.savePropertyValue(LAST_LOAD_BMP_FILE_PATH,
 					strDirectory);
 			
 			//download file
@@ -264,7 +358,134 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 
 		return false;
 	}
+	
+	private void printMacToDevice() {
+		try {
+			String strBleID = textDeviceID.getText();
+			if (strBleID.length() != 12) {
+				System.out.println("device id length invalid");
+				return;
+			}
+			
+			//esl type
+			MTagType tagType;
+			EslObject eslObj = this.mMqttMsgHandler.getEslObjByID(strBleID);	
+			if (eslObj == null || eslObj.mEslType == null)
+			{
+				tagType = MTagType.MTagTypeFromID(this.comboSizeTypeBox.getSelectedIndex());
+				if (tagType == null) {
+					System.out.println("please select ESL Type");
+					return;
+				}
+			}else{
+				tagType = eslObj.mEslType;
+			}
+			
+			PrintTextCfg textCfg = new PrintTextCfg();
+			textCfg.lcdType = tagType;
+			
+			//Overwrite the previous picture, if you only append text, then using MTagType.LcdColorTranspant
+			textCfg.nBkgColor = MTagType.LcdColorWhite; 
+			
+			textCfg.nPictrueID = 1;
+			textCfg.nPictureNode = 0;
+			textCfg.nStartRow = 2;
+			textCfg.nStartColumn = 2;
+			textCfg.strPrintText = strBleID.toUpperCase();
+			if (tagType.is3Color())
+			{
+				textCfg.nTextColor = MTagType.LcdColorRed;
+			}else{
+				textCfg.nTextColor = MTagType.LcdColorBlack;
+			}
+			textCfg.nTextBkgColor = MTagType.LcdColorWhite; 
+			String strData = textCfg.objectToMessage();
+						
+			//send the json message to device
+			mJsonMsg = new JSONObject();
+			mJsonMsg.put("msg", "dData");
+			mJsonMsg.put("mac", strBleID);
+			mJsonMsg.put("seq", mMsgSequence++);
+			mJsonMsg.put("auth1", "00000000");
+			mJsonMsg.put("dType", "hex");
+			mJsonMsg.put("data", strData);
+			mMqttClient.pubCommand2Gateway(mJsonMsg.toString());
+		} catch (Exception excpt) {
+			excpt.printStackTrace();
+		}
+	}
+	
+	private void printBattLvlsToDevice()
+	{
+		try {
+			String strBleID = textDeviceID.getText();
+			if (strBleID.length() != 12) {
+				System.out.println("device id length invalid");
+				return;
+			}
+			
+			//esl type
+			MTagType tagType;
+			int nBattLvls = 0;
+			EslObject eslObj = this.mMqttMsgHandler.getEslObjByID(strBleID);	
+			if (eslObj == null || eslObj.mEslType == null)
+			{
+				System.out.println("not found the device, cant not get voltage");
+				return;
+			}else{
+				tagType = eslObj.mEslType;
+				nBattLvls = eslObj.mEslVoltage;
+			}
+			
+			//esl type
+			PrintTextCfg textCfg = new PrintTextCfg();
+			textCfg.lcdType = tagType;
+			
+			//ESL background color, if you only append text, then using MTagType.LcdColorTranspant
+			//if the color = MTagType.LcdColorWhite, then previous picture will be erase by white color
+			textCfg.nBkgColor = MTagType.LcdColorTranspant; 
 
+			textCfg.nPictrueID = 1;
+			textCfg.nPictureNode = 0;
+			textCfg.nStartRow = 5;
+			textCfg.nStartColumn = 2;
+			textCfg.strPrintText = "Batt:" + nBattLvls + "mv";
+			
+			if (tagType.is3Color())
+			{
+				//text color
+				textCfg.nTextColor = MTagType.LcdColorRed;
+				
+				//background color of text area
+				//check if need low battery warning
+				if (nBattLvls < 2500){
+					textCfg.nTextBkgColor = MTagType.LcdColorRed;
+				}else{
+					textCfg.nTextBkgColor = MTagType.LcdColorWhite;
+				}
+			}else{
+				textCfg.nTextColor = MTagType.LcdColorBlack;
+				textCfg.nTextBkgColor = MTagType.LcdColorWhite;
+			}
+			String strData = textCfg.objectToMessage();
+						
+			//send the json message to device
+			mJsonMsg = new JSONObject();
+			mJsonMsg.put("msg", "dData");
+			mJsonMsg.put("mac", strBleID);
+			mJsonMsg.put("seq", mMsgSequence++);
+			mJsonMsg.put("auth1", "00000000");
+			mJsonMsg.put("dType", "hex");
+			mJsonMsg.put("data", strData);
+			mMqttClient.pubCommand2Gateway(mJsonMsg.toString());
+			
+		} catch (Exception excpt) {
+			excpt.printStackTrace();
+		}
+		
+		return;
+	}
+	
 	private void downQRCodeToDevice() {
 		try {
 			if (textDeviceID.getText().length() != 12) {
@@ -282,7 +503,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			
 		    //create qrcode bmp file
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-			CreateQRCode.createQRcode(textDeviceID.getText(), outputStream);
+			CreateQRCode.createQRcode(textDeviceID.getText().toUpperCase(), outputStream);
 
 			// create refresh block head
 			PicturePartRefreshStru refreshStru = new PicturePartRefreshStru();
@@ -318,12 +539,46 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			excpt.printStackTrace();
 		}
 	}
+	
+	public boolean openJsonFile() {
+		JFileChooser fileChooser = new JFileChooser();
+	    
+	    String strLastDirectory = EslConfig.getPropertyValue(LAST_LOAD_JSON_FILE_PATH, ".");
+	    fileChooser.setCurrentDirectory(new File(strLastDirectory));
+	    fileChooser.setAcceptAllFileFilterUsed(false);
+	
+	    final String[]fileEName = { ".json", "JSON文件(*.json)" };
+	    fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
+	    	public boolean accept(File file) 
+	    	{ 
+	    		if (file.getName().endsWith(fileEName[0]) || file.isDirectory()) 
+	    		{
+	    			return true;
+	    		}
+	   
+	    		return false;
+	    	}
+	    	
+	    	public String getDescription() 
+	    	{
+	    		return fileEName[1];
+	    	}
+	     });
+	
+	    if (JFileChooser.APPROVE_OPTION == fileChooser.showDialog(null, null))
+	    {
+		    String strJsonFile = fileChooser.getSelectedFile().getAbsolutePath();  
+		    textJsonFile.setText(strJsonFile);
+	    }
+	    
+	    return true;
+	}
 
 	public boolean openBmpFile() {
 		JFileChooser fileChooser = new JFileChooser();
 
 		String strLastDirectory = EslConfig.getPropertyValue(
-				LAST_LOAD_JSON_FILE_PATH, ".");
+				LAST_LOAD_BMP_FILE_PATH, ".");
 		fileChooser.setCurrentDirectory(new File(strLastDirectory));
 		fileChooser.setAcceptAllFileFilterUsed(false);
 
@@ -345,7 +600,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 		if (JFileChooser.APPROVE_OPTION == fileChooser.showDialog(null, null)) {
 			String strJsonFile = fileChooser.getSelectedFile()
 					.getAbsolutePath();
-			textJsonFile.setText(strJsonFile);
+			textBmpFile.setText(strJsonFile);
 		}
 
 		return true;
@@ -379,8 +634,11 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			textLogInfo.append("Mqtt Server connected\r\n");
 		} else if (connNtf == ConnectionNotify.CONN_NTF_DISCONNECTED) {
 			buttonConn.setEnabled(true);
-			buttonPushMsg.setEnabled(false);
+			buttonPushBmpMsg.setEnabled(false);
+			buttonPushJsonMsg.setEnabled(false);
 			buttonQRCode.setEnabled(false);
+			buttonPrintMac.setEnabled(false);
+			buttonPrintBattLvls.setEnabled(false);
 			textLogInfo.append("Mqtt Server disconnected\r\n");
 			// wait and reconnect
 			Timer timer = new Timer();
@@ -391,8 +649,11 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 				}
 			}, 10000);
 		} else if (connNtf == ConnectionNotify.CONN_SHAKE_SUCCESS) {
-			buttonPushMsg.setEnabled(true);
+			buttonPushBmpMsg.setEnabled(true);
+			buttonPushJsonMsg.setEnabled(true);
 			buttonQRCode.setEnabled(true);
+			buttonPrintMac.setEnabled(true);
+			buttonPrintBattLvls.setEnabled(true);
 			mShakeWithGwSucc = true;
 			textLogInfo.append("Gateway shake success\r\n");
 		}
@@ -415,7 +676,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			if (obj != null) {
 				EslObject eslObj = (EslObject) obj;
 				textLogInfo.append(getCurrentTime() + eslObj.mMacAddress
-						+ ", found new device:" + eslObj.mEslType.getName() + "\r\n");
+						+ ", found device:" + eslObj.mEslType.getName() + ", rssi" + eslObj.mRssi + "\r\n");
 			}
 		} else if (downNtf == ActionNotify.DEVICE_UPDATE) {
 
@@ -455,3 +716,4 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 	private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat(
 			"yyyy-MM-dd HH:mm:ss");
 }
+	

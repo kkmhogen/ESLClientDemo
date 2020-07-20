@@ -62,6 +62,11 @@ public class BeaconMqttPushCallback implements MqttCallback {
     	mMqttNotifyHandler = mqttNotify;
     }
     
+    public EslObject getEslObjByID(String strMac)
+    {
+    	return mDeviceMap.get(strMac);
+    }
+    
     public String getGatewaySubAction()
     {
     	return mGatewaySubaction;
@@ -283,14 +288,11 @@ public class BeaconMqttPushCallback implements MqttCallback {
 			    //rssi
 				String strRssi = obj.getString("rssi");
 				int nRssi = 0;
-				if (strRssi != null)
+				if (strRssi == null)
 				{
-				    nRssi = Integer.valueOf(strRssi);
-					if (nRssi >= 10){
-						System.out.println("beacon mqtt input invalid error");
-						return ERR_INVALID_INPUT;
-					}
+					continue;
 				}
+				nRssi = Integer.valueOf(strRssi);
 				
 				//esl type
 				int nEslType = obj.getInt("eslType");

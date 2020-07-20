@@ -230,3 +230,84 @@ private void downQRCodeToDevice() {
 		}
 	}
   ```
+
+### 3.4 Download text to device
+Sometimes, we need to print some error information or text information on the label.  
+for example: we print the battery voltage on the screen.  
+Mark: only support ascii(16*8 pixels) font.
+
+![avatar](https://github.com/kkmhogen/ESLClientDemo/blob/master/picture/text_update .png?raw=true)
+
+Example for download battery levels to device
+```Java
+private void printBattLvlsToDevice()
+{
+	try {
+		String strBleID = textDeviceID.getText();
+		if (strBleID.length() != 12) {
+			System.out.println("device id length invalid");
+			return;
+		}
+
+		//esl type
+		MTagType tagType;
+		int nBattLvls = 0;
+		EslObject eslObj = this.mMqttMsgHandler.getEslObjByID(strBleID);
+		if (eslObj == null || eslObj.mEslType == null)
+		{
+			System.out.println("not found the device, cant not get voltage");
+			return;
+		}else{
+			tagType = eslObj.mEslType;
+			nBattLvls = eslObj.mEslVoltage;
+		}
+
+		//esl type
+		PrintTextCfg textCfg = new PrintTextCfg();
+		textCfg.lcdType = tagType;
+
+		//ESL background color, if you only append text, then using MTagType.LcdColorTranspant
+		//if the color = MTagType.LcdColorWhite, then previous picture will be erase by white color
+		textCfg.nBkgColor = MTagType.LcdColorTranspant;
+
+		textCfg.nPictrueID = 1;
+		textCfg.nPictureNode = 0;
+		textCfg.nStartRow = 5;
+		textCfg.nStartColumn = 2;
+		textCfg.strPrintText = "Batt:" + nBattLvls + "mv";
+
+		if (tagType.is3Color())
+		{
+			//text color
+			textCfg.nTextColor = MTagType.LcdColorRed;
+
+			//background color of text area
+			//check if need low battery warning
+			if (nBattLvls < 2500){
+				textCfg.nTextBkgColor = MTagType.LcdColorRed;
+			}else{
+				textCfg.nTextBkgColor = MTagType.LcdColorWhite;
+			}
+		}else{
+			textCfg.nTextColor = MTagType.LcdColorBlack;
+			textCfg.nTextBkgColor = MTagType.LcdColorWhite;
+		}
+		String strData = textCfg.objectToMessage();
+
+		//send the json message to device
+		mJsonMsg = new JSONObject();
+		mJsonMsg.put("msg", "dData");
+		mJsonMsg.put("mac", strBleID);
+		mJsonMsg.put("seq", mMsgSequence++);
+		mJsonMsg.put("auth1", "00000000");
+		mJsonMsg.put("dType", "hex");
+		mJsonMsg.put("data", strData);
+		mMqttClient.pubCommand2Gateway(mJsonMsg.toString());
+
+	} catch (Exception excpt) {
+		excpt.printStackTrace();
+	}
+
+	return;
+}
+```
