@@ -236,7 +236,7 @@ Sometimes, we need to print some error information or text information on the la
 for example: we print the battery voltage on the screen.  
 Mark: only support ascii(16*8 pixels) font.
 
-![avatar](https://github.com/kkmhogen/ESLClientDemo/blob/master/picture/text_update .png?raw=true)
+![avatar](https://github.com/kkmhogen/ESLClientDemo/blob/master/picture/text_update.png?raw=true)
 
 Example for download battery levels to device
 ```Java
