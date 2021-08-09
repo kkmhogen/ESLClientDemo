@@ -15,7 +15,7 @@ public class EslMain extends JFrame
 	{
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		this.setSize(600, 800);
-		this.setTitle("Mqtt Demo");
+		this.setTitle("KESL Demo");
 		this.add(pannel);
 		this.setResizable(false);
 		this.setVisible(true);

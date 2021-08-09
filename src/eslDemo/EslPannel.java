@@ -387,7 +387,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			//Overwrite the previous picture, if you only append text, then using MTagType.LcdColorTranspant
 			textCfg.nBkgColor = MTagType.LcdColorWhite; 
 			
-			textCfg.nPictrueID = 1;
+			textCfg.nPictrueID = 2;
 			textCfg.nPictureNode = 0;
 			textCfg.nStartRow = 1;
 			textCfg.nStartColumn = 2;
@@ -445,7 +445,7 @@ public class EslPannel extends JPanel implements MqttEventNotify {
 			//if the color = MTagType.LcdColorWhite, then previous picture will be erase by white color
 			textCfg.nBkgColor = MTagType.LcdColorTranspant; 
 
-			textCfg.nPictrueID = 1;
+			textCfg.nPictrueID = 4;
 			textCfg.nPictureNode = 0;
 			textCfg.nStartRow = 4;
 			textCfg.nStartColumn = 2;
